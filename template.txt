@@ -5,6 +5,7 @@
 | Environment = [[ mission.environment ]]
 | RecLevel = [[ mission.reclevel ]]
 }}
+[% raw %][[Category:Missions|[% endraw %][[ mission.sortkey ]][% raw %]]][% endraw %]
 
 [% if mission.difficulty != 'Extra' -%]
 ==Map==
@@ -33,8 +34,8 @@
 [% endif %]
 [%- endfor -%]
 }}
+
 [% if mission.strategy %]
 ==Strategy==
 [[ mission.strategy ]]
 [% endif %]
-[% raw %][[Category:Missions|[% endraw %][[ mission.sortkey ]][% raw %]]][% endraw %]

@@ -6,21 +6,37 @@ import wikitextparser as wtp
 WIKI_API = 'https://bluearchive.wiki/w/api.php'
 
 site = None
+stored_auth = [None, None]
 
 
 
 def init(args):
     global site
+    global stored_auth
 
     try:
         site = Site(WIKI_API)
         site.login(args['wiki'][0], args['wiki'][1])
         print(f'Logged in to wiki, token {site.token()}')
+        stored_auth = args['wiki']
 
     except Exception as err:
         print(f'Wiki error: {err}')
         traceback.print_exc()
 
+
+def reauthenticate():
+    global site
+    global stored_auth
+
+    print (f"Server reports bad CSRF token, reathenticating")
+    try:
+        site.login(stored_auth[0], stored_auth[1])
+        print(f'Logged in to wiki, token {site.token()}')
+
+    except Exception as err:
+        print(f'Wiki error: {err}')
+        traceback.print_exc()
 
 
 def page_exists(page, wikitext = None):
@@ -46,23 +62,48 @@ def page_exists(page, wikitext = None):
         
 
 
-def page_list(match):
+def page_list(match, srnamespace = '*'): #TODO namespaces lookup https://www.mediawiki.org/wiki/Manual:Namespace
     global site
     page_list = []
 
     try: 
-        for r in site.query(list='search', srwhat='title', srsearch=match, srlimit=200, srprop='isfilematch'):
+        for r in site.query(list='search', srsearch=match, srlimit=200, srprop='isfilematch', srnamespace = srnamespace):
             for page in r['search']:
                 page_list.append(page['title'].replace(' ', '_'))
     except ApiError as error:
         if error.message == 'Call failed':
             print (f"Call failed, retrying")
             page_list(match)
-        elif error.data['code'] == 'fileexists-no-change':
-            print (f"{error.data['info']}")
-            return True
+        # elif error.data['code'] == 'fileexists-no-change':
+        #     print (f"{error.data['info']}")
+        #     return True
         else:
-            print (f"Unknown upload error {error}")
+            print (f"Unknown error {error}")
+
+    #print(f"Fetched {len(page_list)} pages that match {match}")
+    return page_list
+
+
+
+def category_members(cmtitle, cmnamespace = '*'):
+    global site
+    page_list = []
+
+    if not cmtitle.startswith('Category:'): cmtitle = 'Category:' + cmtitle
+
+    try: 
+        for r in site.query(list='categorymembers', cmtitle=cmtitle, cmtype='page|subcat|file', cmlimit=200, cmprop='title', cmnamespace = cmnamespace):
+            for page in r['categorymembers']:
+                page_list.append(page['title'].replace(' ', '_'))
+    except ApiError as error:
+        if error.message == 'Call failed':
+            print (f"Call failed, retrying")
+            category_members(cmtitle, cmnamespace)
+        # elif error.data['code'] == 'fileexists-no-change':
+        #     print (f"{error.data['info']}")
+        #     return True
+        else:
+            print (f"Unknown error {error}")
 
     #print(f"Fetched {len(page_list)} pages that match {match}")
     return page_list
@@ -108,9 +149,19 @@ def update_template(page_name, template_name, wikitext):
 def update_section(page_name, section_name, wikitext):
     section_old = None
     section_new = None
-
-    text = site('parse', page=page_name, prop='wikitext')
-    print (f"Updating wiki page {text['parse']['title']}")
+    
+    try:
+        text = site('parse', page=page_name, prop='wikitext')
+        print (f"Updating wiki page {text['parse']['title']}")
+    except ApiError as error:
+        if error.message == 'Call failed':
+            print (f"Call failed, retrying")
+            update_section(page_name, section_name, wikitext)
+        elif error.code == 'missingtitle':
+            print (f'Target page {page_name} not found')
+            return
+        else:
+            print(error)
 
     wikitext_old = wtp.parse(text['parse']['wikitext'])
     for section in wikitext_old.sections:
@@ -141,6 +192,43 @@ def update_section(page_name, section_name, wikitext):
 
 
 
+#This is a bit weird, added to update the first part of character pages which do not have a section heading
+def update_section_number(page_name, section_number, wikitext): 
+    section_old = None
+    section_new = None
+    
+    try:
+        text = site('parse', page=page_name, prop='wikitext')
+        print (f"Updating wiki page {text['parse']['title']}")
+    except ApiError as error:
+        if error.message == 'Call failed':
+            print (f"Call failed, retrying")
+            update_section(page_name, section_number, wikitext)
+
+    wikitext_old = wtp.parse(text['parse']['wikitext'])
+    section_old = str(wikitext_old.sections[section_number])
+    #print (f'Old section text is {section_old}')
+
+    wikitext_new = wtp.parse(wikitext)
+    section_new = str(wikitext_new.sections[section_number])
+    #print (f'New section text is {section_new}')
+
+    if section_new == None:
+        print (f'Unable to find new section data')
+        return
+
+    if section_old == None:
+        print (f'Unable to find old section data')
+        return
+
+    if section_new == section_old:
+        print (f'...no changes in section №{section_number} for {page_name}')
+    else:
+        #print(f'Updated section number {section_number}')
+        publish(page_name, text['parse']['wikitext'].replace(section_old, section_new), summary=f'Updated section №{section_number}')
+
+
+
 def publish(page_name, wikitext, summary='Publishing generated page'):
     global site
 
@@ -156,14 +244,16 @@ def publish(page_name, wikitext, summary='Publishing generated page'):
         if error.message == 'Call failed':
             print (f"Call failed, retrying")
             publish(page_name, wikitext, summary)
+        elif error.data['code'] == 'badtoken':
+            reauthenticate()
+            publish(page_name, wikitext, summary)
         else:
             print (f"Unknown publishing error {error}")
 
 
 
-def upload(file, name, comment = 'File upload'):
+def upload(file, name, comment = 'File upload', text = ''):
     global site
-
     f = open(file, "rb")
 
     try: 
@@ -171,6 +261,7 @@ def upload(file, name, comment = 'File upload'):
             action='upload',
             filename=name,
             comment=comment,
+            text=text,
             ignorewarnings=True,
             token=site.token(),
             POST=True,
@@ -183,9 +274,51 @@ def upload(file, name, comment = 'File upload'):
     except ApiError as error:
         if error.message == 'Call failed':
             print (f"Call failed, retrying")
-            upload(file, name)
+            upload(file, name, comment, text)
+        elif error.data['code'] == 'backend-fail-internal':
+            print (f"Server failed with {error.data['code']}, retrying")
+            upload(file, name, comment, text)
+        elif error.data['code'] == 'badtoken':
+            reauthenticate()
+            upload(file, name, comment, text)
         elif error.data['code'] == 'fileexists-no-change':
             print (f"{error.data['info']}")
             return True
         else:
             print (f"Unknown upload error {error}")
+
+
+def move(name_old, name_new, summary='Consistent naming', noredirect=True):
+    global site
+
+    print(f"Moving {name_old} → {name_new}")
+    try:
+        #get pageid
+        pageid = None
+        for page in site.query_pages(titles=[name_old]):
+            #print(page)
+            pageid = page['pageid']
+
+        if pageid:
+            site(
+                action='move',
+                fromid=pageid,
+                to=name_new,
+                reason=summary,
+                movetalk=True,
+                movesubpages=True,
+                noredirect=noredirect,
+                token=site.token(),
+                POST=True
+            )
+    except ApiError as error:
+        if error.message == 'Call failed':
+            print (f"Call failed, retrying")
+            move(name_old, name_new, summary)
+        else:
+            print (f"Unknown moving error {error}")
+
+
+def redirect(name_from, name_to, summary='Generated redirect'):
+    wikitext = f"#REDIRECT [[{name_to}]]"
+    publish(name_from, wikitext, summary)
