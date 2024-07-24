@@ -109,9 +109,9 @@ def get_gacha_prob(gacha_element, data):
 
 
 
-def get_rewards(campaign_stage, data):
+def get_rewards(campaign_stage, data, regional_data = None):
     rewards = collections.defaultdict(list)
-    for reward in _get_rewards(campaign_stage, data):
+    for reward in _get_rewards(campaign_stage, data, regional_data):
         #print(reward)
         rewards[reward.tag].append(reward)
 
@@ -126,8 +126,8 @@ _REWARD_TYPES = {
 }
 
 
-def _get_rewards(campaign_stage, data):
-    rewards = data.campaign_stage_rewards[campaign_stage['CampaignStageRewardId']]
+def _get_rewards(campaign_stage, data, regional_data):
+    rewards = (regional_data is not None and campaign_stage['CampaignStageRewardId'] in regional_data.campaign_stage_rewards) and regional_data.campaign_stage_rewards[campaign_stage['CampaignStageRewardId']] or data.campaign_stage_rewards[campaign_stage['CampaignStageRewardId']]
     for reward in rewards:
         reward_type = reward['StageRewardParcelType']
         #print (reward_type)

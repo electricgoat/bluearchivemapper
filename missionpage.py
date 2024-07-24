@@ -12,7 +12,7 @@ from pywikiapi import Site
 
 import wiki
 
-from data import load_data, load_translations
+from data import load_data, load_translations, load_regional_data
 from mapper import load_assets, map_campaign_stage
 from rewards import get_rewards
 
@@ -29,10 +29,10 @@ VARIABLE_END_STRING = "]]"
 COMMENT_START_STRING = "[#"
 COMMENT_END_STRING = "#]"
 
-Mission = collections.namedtuple('Mission', 'name,cost,difficulty,environment,reclevel,filename,rewards,strategy,sortkey')
+Mission = collections.namedtuple('Mission', 'name,cost,difficulty,environment,reclevel,filename,rewards_jp,rewards_gl,strategy,sortkey')
 
 args = None
-
+regional_data = {'jp':None, 'gl':None}
 
 #def formaticon(value):
 #    return value.rsplit('/', 1)[-1] + '.png'
@@ -101,7 +101,7 @@ def render_mission_page(name, campaign_stage, data, tls):
         comment_end_string=COMMENT_END_STRING
     )
     #env.filters['formaticon'] = formaticon
-    template = env.get_template('template.txt')
+    
     mission = Mission(
         name,
         campaign_stage['StageEnterCostAmount'],
@@ -109,12 +109,25 @@ def render_mission_page(name, campaign_stage, data, tls):
         environment_names[campaign_stage['StageTopography']],
         campaign_stage['RecommandLevel'],
         f'{campaign_stage["Name"]}.png',
-        get_rewards(campaign_stage, data),
+        get_rewards(campaign_stage, data, regional_data['jp']),
+        get_rewards(campaign_stage, data, regional_data['gl']),
         tls.strategies[name]['Description'] if name in tls.strategies else None,
         get_campaign_stage_sortkey(campaign_stage['Name'])
 
     )
-    return template.render(mission=mission)
+    print(f"Mission {name}")
+    template = env.get_template('template_drops.txt')
+    drops_jp = template.render(rewards=mission.rewards_jp, wiki_template_name = 'MissionRewards')
+    drops_gl = template.render(rewards=mission.rewards_gl, wiki_template_name = 'MissionRewardsGL')
+    if drops_jp == drops_gl.replace('MissionRewardsGL', 'MissionRewards'): 
+        wikitext_drops = drops_jp
+    else:
+        print(f"Mission {name} has differing regional rewards")
+        wikitext_drops = f"<tabber>\nJP=\n{drops_jp}\n|-|\nGL=\n{drops_gl}\n</tabber>"
+
+
+    template = env.get_template('template.txt')
+    return template.render(mission=mission, wikitext_drops=wikitext_drops)
 
 
 def missionpage(map, data, tls, assets):
@@ -166,6 +179,7 @@ def missionpage(map, data, tls, assets):
 
 def main():
     global args, site
+    global regional_data
 
     parser = argparse.ArgumentParser()
 
@@ -187,6 +201,9 @@ def main():
     #print(args)
     try:
         data = load_data(args['data_primary'], args['data_secondary'], args['translation'])
+        regional_data['jp'] = load_regional_data(args['data_primary'])
+        regional_data['gl'] = load_regional_data(args['data_secondary']) 
+
         tls = load_translations('translation')
         assets = load_assets()
 

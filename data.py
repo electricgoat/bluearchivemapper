@@ -15,6 +15,12 @@ BlueArchiveTranslations = collections.namedtuple(
     ['strategies']
 )
 
+BlueArchiveRegionalData = collections.namedtuple(
+    'BlueArchiveRegionalData',
+    ['campaign_stage_rewards'
+     ]
+)
+
 
 def load_campaign_stages(path):
     return load_file(os.path.join(path, 'Excel', 'CampaignStageExcelTable.json'))
@@ -70,6 +76,12 @@ def load_data(path_primary, path_secondary, path_translation):
         equipment=load_equipment(path_primary),
         localization=load_combined_localization(path_primary, path_secondary, path_translation, 'LocalizeEtcExcelTable.json'),
         stages=None, #load_stages(path_primary),
+    )
+
+
+def load_regional_data(path):
+    return BlueArchiveRegionalData(
+        campaign_stage_rewards=load_campaign_stage_rewards(path),
     )
 
 

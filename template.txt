@@ -16,26 +16,9 @@
 [% endif -%]
 
 ==Drops==
-{{MissionRewards
-[% for reward in mission.rewards.get('FirstClear', []) -%]
-| FirstClear[[ loop.index ]] = [[ reward.name ]]
-[% endfor -%]
-[% for reward in (mission.rewards.get('Default', []) + mission.rewards.get('Rare', [])) -%]
-| Main[[ loop.index ]] = [[ reward.name ]]
-[% if reward.prob %]| Main[[ loop.index ]]Prob = [[ reward.prob ]][% endif %]
-[% endfor -%]
-[% for reward in mission.rewards.get('Other', []) -%]
-| Other[[ loop.index ]] = [[ reward.name ]]
-[%- if reward.prob and reward.prob !=100  %]
-| Other[[ loop.index ]]Prob = [[ reward.prob ]]
-[% endif %]
-[%- if reward.amount and reward.amount != 1 %]
-| Other[[ loop.index ]]Amount = [[ reward.amount ]]
-[% endif %]
-[%- endfor -%]
-}}
+[[ wikitext_drops ]]
 
-[% if mission.strategy %]
+[% if mission.strategy -%]
 ==Strategy==
 [[ mission.strategy ]]
 [% endif %]
