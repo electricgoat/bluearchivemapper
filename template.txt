@@ -4,8 +4,8 @@
 | Difficulty = [[ mission.difficulty ]]
 | Environment = [[ mission.environment ]]
 | RecLevel = [[ mission.reclevel ]]
+| Sortkey = [[ mission.sortkey ]]
 }}
-[% raw %][[Category:Missions|[% endraw %][[ mission.sortkey ]][% raw %]]][% endraw %]
 
 [% if mission.difficulty != 'Extra' -%]
 ==Map==
