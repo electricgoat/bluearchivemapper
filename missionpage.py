@@ -120,6 +120,7 @@ def render_mission_page(name, campaign_stage, data, tls):
     drops_jp = template.render(rewards=mission.rewards_jp, wiki_template_name = 'MissionRewards')
     drops_gl = template.render(rewards=mission.rewards_gl, wiki_template_name = 'MissionRewardsGL')
     if drops_jp == drops_gl.replace('MissionRewardsGL', 'MissionRewards'): 
+        #print(f"Mission {name} has same regional rewards")
         wikitext_drops = drops_jp
     else:
         print(f"Mission {name} has differing regional rewards")
@@ -171,7 +172,7 @@ def missionpage(map, data, tls, assets):
 
         if args['wiki_section'] != None:
             #print(f"Updating section {args['wiki_section']} of {wikipath}")
-            wiki.update_section(wikipath, args['wiki_section'], wikitext)
+            wiki.update_section(wikipath, args['wiki_section'], wikitext, preserve_trailing_parts=True)
         elif not wiki.page_exists(wikipath, wikitext):
             print(f'Publishing {wikipath}')
             wiki.publish(wikipath, wikitext, f'Generated mission page for {map}')

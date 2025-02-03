@@ -2,6 +2,7 @@ import traceback
 
 from pywikiapi import Site, ApiError
 import wikitextparser as wtp
+import re
 
 WIKI_API = 'https://bluearchive.wiki/w/api.php'
 
@@ -15,28 +16,38 @@ def init(args):
     global stored_auth
 
     try:
-        site = Site(WIKI_API)
-        site.login(args['wiki'][0], args['wiki'][1])
-        print(f'Logged in to wiki, token {site.token()}')
         stored_auth = args['wiki']
+        site = Site(WIKI_API)
+        site.login(stored_auth[0], stored_auth[1])
+        print(f'Logged in to wiki, token {site.token()}')
 
-    except Exception as err:
-        print(f'Wiki error: {err}')
-        traceback.print_exc()
+    except ApiError as error:
+        if error.message == 'Login failed':
+            print (f"Login failed, retrying")
+            reauthenticate()
+        else:
+            print(f'Wiki API error: {error}')
+            traceback.print_exc()
+
 
 
 def reauthenticate():
     global site
     global stored_auth
 
-    print (f"Server reports bad CSRF token, reathenticating")
+    print (f"Reauthenticating with {stored_auth}")
     try:
         site.login(stored_auth[0], stored_auth[1])
         print(f'Logged in to wiki, token {site.token()}')
 
-    except Exception as err:
-        print(f'Wiki error: {err}')
-        traceback.print_exc()
+    except ApiError as error:
+        if error.message == 'Call failed':
+            print (f"Call failed, retrying")
+            reauthenticate()
+        if error.message == 'Login failed':
+            print (f"Login failed, check credentials")
+            exit()
+
 
 
 def page_exists(page, wikitext = None):
@@ -67,7 +78,7 @@ def page_list(match, srnamespace = '*'): #TODO namespaces lookup https://www.med
     page_list = []
 
     try: 
-        for r in site.query(list='search', srsearch=match, srlimit=200, srprop='isfilematch', srnamespace = srnamespace):
+        for r in site.query(list='search', srsearch=match, srlimit=400, srprop='isfilematch', srnamespace = srnamespace):
             for page in r['search']:
                 page_list.append(page['title'].replace(' ', '_'))
     except ApiError as error:
@@ -146,7 +157,7 @@ def update_template(page_name, template_name, wikitext):
 
 
 
-def update_section(page_name, section_name, wikitext):
+def update_section(page_name:str, section_name:str, wikitext:str, preserve_trailing_parts:bool = False):
     section_old = None
     section_new = None
     
@@ -184,6 +195,13 @@ def update_section(page_name, section_name, wikitext):
     if section_old == None:
         print (f'Unable to find old section data')
         return
+    
+    if preserve_trailing_parts:
+        new_trailing_parts = extract_trailing_parts(section_new)
+        for old_part in extract_trailing_parts(section_old):
+            if old_part not in new_trailing_parts and len(old_part) < 100:
+                section_new += '\n' + old_part
+        if not section_new.endswith('\n'): section_new += '\n'
 
     if section_new == section_old:
         print (f'...no changes in {section_name} section for {page_name}')
@@ -322,3 +340,9 @@ def move(name_old, name_new, summary='Consistent naming', noredirect=True):
 def redirect(name_from, name_to, summary='Generated redirect'):
     wikitext = f"#REDIRECT [[{name_to}]]"
     publish(name_from, wikitext, summary)
+
+
+def extract_trailing_parts(section):
+    #Match {{...}} or [[Category:...]]
+    trailing_pattern = re.compile(r'(\{\{[^}]+\}\}|\[\[Category:[^\]]+\]\])\s*$', re.MULTILINE)
+    return trailing_pattern.findall(section)
