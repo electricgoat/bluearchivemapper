@@ -199,9 +199,9 @@ def update_section(page_name:str, section_name:str, wikitext:str, preserve_trail
     if preserve_trailing_parts:
         new_trailing_parts = extract_trailing_parts(section_new)
         for old_part in extract_trailing_parts(section_old):
-            if old_part not in new_trailing_parts and len(old_part) < 100:
+            if old_part not in new_trailing_parts:
                 section_new += '\n' + old_part
-        if not section_new.endswith('\n'): section_new += '\n'
+        section_new += '\n'
 
     if section_new == section_old:
         print (f'...no changes in {section_name} section for {page_name}')

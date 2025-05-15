@@ -170,7 +170,9 @@ def missionpage(map, data, tls, assets):
     if wiki.site != None:
         wikipath = f'Missions/{map}'
 
-        if args['wiki_section'] != None:
+        if args['wiki_template'] != None:
+            wiki.update_template(wikipath, args['wiki_template'], wikitext)
+        elif args['wiki_section'] != None:
             #print(f"Updating section {args['wiki_section']} of {wikipath}")
             wiki.update_section(wikipath, args['wiki_section'], wikitext, preserve_trailing_parts=True)
         elif not wiki.page_exists(wikipath, wikitext):
@@ -190,6 +192,7 @@ def main():
     parser.add_argument('-translation', metavar='DIR', help='Additional translations directory')
     parser.add_argument('-outdir', metavar='DIR', help='Output directory')
     parser.add_argument('-wiki', nargs=2, metavar=('LOGIN', 'PASSWORD'), help='Publish data to wiki')
+    parser.add_argument('-wiki_template', metavar='TEMPLATE NAME', help='Name of a template whose data will be updated')
     parser.add_argument('-wiki_section', metavar='SECTION TITLE', help='Name of a page section to be updated')
     #parser.add_argument('-wikipath', metavar='PATH', help='Parent material for the generated pages')
 

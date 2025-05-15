@@ -17,7 +17,6 @@
 
 ==Drops==
 [[ wikitext_drops ]]
-
 [% if mission.strategy -%]
 ==Strategy==
 [[ mission.strategy ]]
