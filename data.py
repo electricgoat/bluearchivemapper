@@ -1,6 +1,7 @@
 import collections
 import os
 import json
+import orjson
 #import pathlib
 
 BlueArchiveData = collections.namedtuple(
@@ -22,96 +23,45 @@ BlueArchiveRegionalData = collections.namedtuple(
 )
 
 
-def load_campaign_stages(path):
-    return load_file(os.path.join(path, 'Excel', 'CampaignStageExcelTable.json'))
+
+def load_generic(path, filename:str, key:str|None='Id', load_db:bool=True, load_multipart:bool=False):
+    #DB files take priority if they are present
+    file_path = os.path.join(path, 'DB', filename)
+    if not load_db or not os.path.exists(file_path): file_path = os.path.join(path, 'Excel', filename)
+
+    return load_file(file_path, key, load_multipart)
 
 
-def load_campaign_stage_rewards(path):
-    return load_file_grouped(os.path.join(path, 'Excel', 'CampaignStageRewardExcelTable.json'), 'GroupId')
+def load_file(file, key:str|None='Id', load_multipart:bool=False):
+    multipart_file = file.rsplit('.',1)[0]+ '$.' + file.rsplit('.',1)[1]
+
+    if load_multipart and os.path.exists(multipart_file.replace('$', str(1))):
+        #print(f"Found multipart version of {file}")
+        data = []
+        i = 1
+        while os.path.exists(multipart_file.replace('$', str(i))):
+            with open(multipart_file.replace('$', str(i)), encoding="utf8") as f: data += orjson.loads(f.read())['DataList']
+            i += 1
+        if key is not None: return {item[key]: item for item in data}
+        else: return data
+        
+    elif os.path.exists(file): 
+        with open(file, encoding="utf8") as f:
+            data = orjson.loads(f.read())
+        if key is not None: return {item[key]: item for item in data['DataList']}
+        else: return data['DataList']
+    
+    else:
+        print(f'WARNING - file {file} is not present')
+        return {}
 
 
-def load_campaign_strategy_objects(path):
-    return load_file(os.path.join(path, 'Excel', 'CampaignStrategyObjectExcelTable.json'))
-
-
-def load_campaign_units(path):
-    return load_file(os.path.join(path, 'Excel', 'CampaignUnitExcelTable.json'))
-
-
-# def load_characters(path):
-#     # TODO: find something better to use as the key
-#     return load_file(os.path.join(path, 'Excel', 'CharacterExcelTable.json'),
-#                      key='ModelPrefabName',
-#                      pred=lambda item: item['ProductionStep'] == 'Release')
-
-
-def load_costume_by_prefab(path):
-    # TODO: find something better to use as the key
-    return load_file(os.path.join(path, 'Excel', 'CostumeExcelTable.json'),
-                     key='ModelPrefabName',
-                     pred=lambda item: item['ProductionStep'] == 'Release')
-
-
-def load_currencies(path):
-    return load_file(os.path.join(path, 'Excel', 'CurrencyExcelTable.json'), key='ID')
-
-
-def load_data(path_primary, path_secondary, path_translation):
-    return BlueArchiveData(
-        campaign_stages=load_campaign_stages(path_primary),
-        campaign_stage_rewards=load_campaign_stage_rewards(path_primary),
-        campaign_strategy_objects=load_campaign_strategy_objects(path_primary),
-        campaign_units=load_campaign_units(path_primary),
-        characters= load_generic(path_primary, 'CharacterExcelTable.json'), #characters=load_characters(path_primary),
-        costumes= load_generic(path_primary, 'CostumeExcelTable.json', key='CostumeGroupId'),
-        costume_by_prefab = load_costume_by_prefab(path_primary),
-        ground = load_generic(path_primary, 'GroundExcelTable.json'),
-        currencies=load_currencies(path_primary),
-        event_content_stages=load_event_content_stages(path_primary),
-        event_content_stage_rewards=load_event_content_stage_rewards(path_primary),
-        gacha_elements=load_gacha_elements(path_primary),
-        gacha_elements_recursive=load_gacha_elements_recursive(path_primary),
-        gacha_groups=load_gacha_groups(path_primary),
-        items=load_items(path_primary),
-        equipment=load_equipment(path_primary),
-        localization=load_combined_localization(path_primary, path_secondary, path_translation, 'LocalizeEtcExcelTable.json'),
-        stages=None, #load_stages(path_primary),
-    )
-
-
-def load_regional_data(path):
-    return BlueArchiveRegionalData(
-        campaign_stage_rewards=load_campaign_stage_rewards(path),
-    )
-
-
-#def load_data(path):
-#    return _load_data(pathlib.Path(path))
-
-def load_generic(path, filename, key='Id'):
-    return load_file(os.path.join(path, 'Excel', filename), key)
-
-
-def load_equipment(path):
-    return load_file(os.path.join(path, 'Excel', 'EquipmentExcelTable.json'))
-
-
-def load_event_content_stages(path):
-    return load_file(os.path.join(path, 'Excel', 'EventContentStageExcelTable.json'))
-
-def load_event_content_stage_rewards(path):
-    return load_file_grouped(os.path.join(path, 'Excel', 'EventContentStageRewardExcelTable.json'), 'GroupId')
-
-
-def load_file(file, key='Id', pred=None):
-    with open(file,encoding="utf8") as f:
-        data = json.load(f)
-    return {item[key]: item for item in data['DataList'] if not pred or pred(item)}
-
-
-def load_file_grouped(file, key="Id"):
-    with open(file,encoding="utf8") as f:
-        data = json.load(f)
+def load_file_grouped(path, filename, key='Id'):
+    #DB files take priority if they are present
+    file_path = os.path.join(path, 'DB', filename)
+    if not os.path.exists(file_path): file_path = os.path.join(path, 'Excel', filename)
+    with open(file_path, encoding="utf8") as f:
+        data = orjson.loads(f.read())
     groups = collections.defaultdict(list)
     for item in data['DataList']:
         groups[item[key]].append(item)
@@ -119,28 +69,46 @@ def load_file_grouped(file, key="Id"):
     return dict(groups)
 
 
-def load_gacha_elements(path):
-    return load_file_grouped(os.path.join(path, 'Excel', 'GachaElementExcelTable.json'), 'GachaGroupID')
+
+def load_costume_by_prefab(path):
+    # TODO: find something better to use as the key
+    data = load_file(os.path.join(path, 'Excel', 'CostumeExcelTable.json'), key='ModelPrefabName')
+    # Only keep items where ProductionStep == 'Release'
+    return {k: v for k, v in data.items() if v.get('ProductionStep') == 'Release'}
 
 
-def load_gacha_elements_recursive(path):
-    return load_file_grouped(os.path.join(path, 'Excel', 'GachaElementRecursiveExcelTable.json'), 'GachaGroupID')
+
+def load_data(path_primary, path_secondary, path_translation):
+    return BlueArchiveData(
+        campaign_stages=load_generic(path_primary, 'CampaignStageExcelTable.json'),
+        campaign_stage_rewards=load_file_grouped(path_primary, 'CampaignStageRewardExcelTable.json', key='GroupId'),
+        campaign_strategy_objects=load_generic(path_primary, 'CampaignStrategyObjectExcelTable.json'),
+        campaign_units=load_generic(path_primary, 'CampaignUnitExcelTable.json'),
+        characters= load_generic(path_primary, 'CharacterExcelTable.json'), #characters=load_characters(path_primary),
+        costumes= load_generic(path_primary, 'CostumeExcelTable.json', key='CostumeGroupId'),
+        costume_by_prefab = load_costume_by_prefab(path_primary),
+        ground = load_generic(path_primary, 'GroundExcelTable.json'),
+        currencies=load_generic(path_primary, 'CurrencyExcelTable.json', key='ID'),
+        event_content_stages=load_generic(path_primary, 'EventContentStageExcelTable.json'),
+        event_content_stage_rewards=load_generic(path_primary, 'EventContentStageExcelTable.json'),
+        gacha_elements=load_file_grouped(path_primary, 'GachaElementExcelTable.json', key='GachaGroupID'),
+        gacha_elements_recursive=load_file_grouped(path_primary, 'GachaElementRecursiveExcelTable.json', key='GachaGroupID'),
+        gacha_groups=load_generic(path_primary, 'GachaGroupExcelTable.json', key='ID'),
+        items=load_generic(path_primary, 'ItemExcelTable.json'),
+        equipment=load_generic(path_primary, 'EquipmentExcelTable.json'),
+        localization=load_combined_localization(path_primary, path_secondary, path_translation, 'LocalizeEtcExcelTable.json'),
+        stages=None, #load_stages(path_primary),
+    )
 
 
-def load_gacha_groups(path):
-    return load_file(os.path.join(path, 'Excel', 'GachaGroupExcelTable.json'), key='ID')
-
-
-def load_items(path):
-    return load_file(os.path.join(path, 'Excel', 'ItemExcelTable.json'))
+def load_regional_data(path):
+    return BlueArchiveRegionalData(
+        campaign_stage_rewards=load_file_grouped(path, 'CampaignStageRewardExcelTable.json', key='GroupId'),
+    )
 
 
 def load_strategies_translations(path):
     return load_file(os.path.join(path, 'Strategies.json'), key='Name')
-
-
-#def load_translations(path):
-#    return _load_translations(pathlib.Path(path))
 
 
 def load_translations(path):
@@ -150,31 +118,24 @@ def load_translations(path):
 
 
 def load_combined_localization(path_primary, path_secondary, path_translation, filename, key='Key'):
-    data_primary = load_file(os.path.join(path_primary, 'Excel', filename), key)
-    data_secondary = load_file(os.path.join(path_secondary, 'Excel', filename), key)
-    data_aux = None
 
-    index_list = list(data_primary.keys())
-    index_list.extend(x for x in list(data_secondary.keys()) if x not in index_list)
+    data_primary = load_generic(path_primary, filename, key, load_db=True, load_multipart=True)
+    data_secondary = load_generic(path_secondary, filename, key, load_db=True, load_multipart=True)
+    data_aux = load_file(os.path.join(path_translation, filename), key, load_multipart=False)
 
-    if os.path.exists(os.path.join(path_translation, filename)):
-        print(f'Loading additional translations from {path_translation}/{filename}')
-        data_aux = load_file(os.path.join(path_translation, filename), key)
+    combined_keys = set(data_primary.keys()).union(data_secondary.keys())
+    if data_aux:
+        combined_keys = combined_keys.union(data_aux.keys())
+        #print(f'Loading additional translations from {os.path.join(path_translation, filename)}')
 
-        index_list.extend(x for x in list(data_aux.keys()) if x not in index_list)
+    for index in combined_keys:
+        if data_aux and index in data_aux:
+            if index in data_primary and 'Jp' in data_primary[index] and data_aux[index]['Jp'] != data_primary[index]['Jp']:
+                print(f"Warning - overwriting Jp text {index}:\n{data_primary[index]['Jp']}\n{data_aux[index]['Jp']}")
+            data_primary[index] = data_aux[index]
+        elif index in data_secondary:
+            data_primary[index] = data_secondary[index]
 
-    for index in index_list:
-        try: 
-            if data_aux != None and index in data_aux:
-                #print(f'Loading aux translation {index}')
-                data_primary[index] = data_aux[index] 
-            else :
-                #print(f'Loading secondary data translation {index}')
-                data_primary[index] = data_secondary[index] 
-        except KeyError:
-            #print (f'No secondary data for localize item {index}')
-            continue
-    
     return data_primary
 
 

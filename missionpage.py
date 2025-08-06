@@ -174,7 +174,7 @@ def missionpage(map, data, tls, assets):
             wiki.update_template(wikipath, args['wiki_template'], wikitext)
         elif args['wiki_section'] != None:
             #print(f"Updating section {args['wiki_section']} of {wikipath}")
-            wiki.update_section(wikipath, args['wiki_section'], wikitext, preserve_trailing_parts=True)
+            wiki.update_section(wikipath, args['wiki_section'], wikitext, preserve_trailing_parts=False)
         elif not wiki.page_exists(wikipath, wikitext):
             print(f'Publishing {wikipath}')
             wiki.publish(wikipath, wikitext, f'Generated mission page for {map}')
