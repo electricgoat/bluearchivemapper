@@ -4,7 +4,19 @@ from tilemap import BrokenTile, HideTile, HideTriggerTile, NormalTile, PortalEnt
 
 
 def get_strategies(map, data):
+    #get actual spawn events list to check against, some entities may be placed on the map but not actually spawned
+    spawned_entity_ids = []
+    for event in map['Events']:
+        for command in event['HexaCommands']:
+            if 'HexaCommandStrategySpawn' in command['$type']:
+                for spawn in command['StrategyEntityIds']:
+                    spawned_entity_ids.append(spawn)
+    spawned_entity_ids = set(spawned_entity_ids)
+
     for hexa_strategy in map['hexaStrageyList']:
+        if hexa_strategy['EntityId'] not in spawned_entity_ids:
+            print(f"Skipping entity {hexa_strategy['EntityId']} at {location} because it is never spawned")
+            continue
         location = (hexa_strategy['Location']['x'], hexa_strategy['Location']['y'], hexa_strategy['Location']['z'])
         yield location, data.campaign_strategy_objects[hexa_strategy['Id']]
 
